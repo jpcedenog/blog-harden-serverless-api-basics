@@ -1,0 +1,56 @@
+service: aws-lambda-lab
+
+frameworkVersion: ">=1.28.0 <2.0.0"
+
+custom:
+  stage: ${opt:stage, self:provider.stage}
+  # Set the table name here so we can use it while testing locally
+  tableName: ${self:custom.stage}-notes
+  # Set our DynamoDB throughput for prod and all other non-prod stages.
+  tableThroughputs:
+    prod: 5
+    default: 1
+  tableThroughput: ${self:custom.tableThroughputs.${self:custom.stage}, self:custom.tableThroughputs.default}
+
+provider:
+  name: aws
+  runtime: go1.x
+  memorySize: 128
+  versionFunctions: false
+  stage: dev
+  region: us-east-1
+  environment:
+    tableName: ${self:custom.tableName}
+
+package:
+ exclude:
+   - ./**
+ include:
+   - ./bin/**
+
+functions:
+  createNote:
+    role: createNoteRole
+    handler: bin/createnote
+    events:
+      - http:
+          path: createnote
+          method: post
+          cors: true
+          authorizer: aws_iam
+  scan:
+    role: scanNotesRole
+    handler: bin/scan
+    events:
+      - http:
+          path: scan
+          method: post
+          cors: true
+          authorizer: aws_iam
+
+resources:
+  - ${file(resources/api-gateway-errors.yml)}
+  - ${file(resources/iam-roles.yml)}
+  - ${file(resources/cognito-user-pool.yml)}
+  - ${file(resources/cognito-identity-pool.yml)}
+  - ${file(resources/dynamodb-table.yml)}
